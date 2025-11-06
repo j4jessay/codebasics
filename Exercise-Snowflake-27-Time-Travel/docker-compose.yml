@@ -1,0 +1,25 @@
+services:
+  generate-data:
+    build: .
+    command: python generate_data.py
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  run:
+    build: .
+    command: python main_challenge.py
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - generate-data
+
+  solution:
+    build: .
+    command: python solution.py
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - generate-data
