@@ -46,7 +46,7 @@ fi
 
 # Wait for Kafka Connect to be ready
 echo "⏳ Waiting for Kafka Connect to be ready..."
-until curl -s http://localhost:8083/ > /dev/null 2>&1; do
+until docker exec kafka-connect curl -s http://localhost:8083/ > /dev/null 2>&1; do
     echo "   Waiting for Kafka Connect..."
     sleep 5
 done
@@ -54,17 +54,19 @@ echo "✅ Kafka Connect is ready"
 
 # Check if connector already exists
 echo "🔍 Checking if connector already exists..."
-if curl -s http://localhost:8083/connectors | grep -q "azure-blob-sink-connector"; then
+if docker exec kafka-connect curl -s http://localhost:8083/connectors | grep -q "azure-blob-sink-connector"; then
     echo "⚠️  Connector already exists. Deleting old connector..."
-    curl -X DELETE http://localhost:8083/connectors/azure-blob-sink-connector
+    docker exec kafka-connect curl -s -X DELETE http://localhost:8083/connectors/azure-blob-sink-connector
     sleep 2
 fi
 
 # Deploy connector
 echo "🚀 Deploying Azure Blob Storage Sink Connector..."
-RESPONSE=$(curl -s -X POST \
+# Copy config to container and deploy from inside
+docker cp "$CONNECTOR_CONFIG" kafka-connect:/tmp/connector-config.json
+RESPONSE=$(docker exec kafka-connect curl -s -X POST \
   -H "Content-Type: application/json" \
-  --data @"$CONNECTOR_CONFIG" \
+  --data @/tmp/connector-config.json \
   http://localhost:8083/connectors)
 
 if echo "$RESPONSE" | grep -q '"name"'; then
@@ -87,7 +89,7 @@ fi
 echo ""
 echo "📊 Checking connector status..."
 sleep 3
-curl -s http://localhost:8083/connectors/azure-blob-sink-connector/status | jq '.'
+docker exec kafka-connect curl -s http://localhost:8083/connectors/azure-blob-sink-connector/status | jq '.'
 
 echo ""
 echo "============================================"
@@ -95,7 +97,7 @@ echo "✅ Deployment Complete!"
 echo "============================================"
 echo ""
 echo "Next steps:"
-echo "1. Verify connector is running: curl http://localhost:8083/connectors/azure-blob-sink-connector/status"
+echo "1. Verify connector is running: docker exec kafka-connect curl -s http://localhost:8083/connectors/azure-blob-sink-connector/status"
 echo "2. Check connector logs: docker logs kafka-connect"
 echo "3. Monitor your Azure Blob Storage container for incoming data"
 echo ""

@@ -6,7 +6,6 @@ This is a condensed version for experienced users. For detailed explanations, se
 
 ## Prerequisites
 - Docker Desktop (running)
-- Python 3.8+
 - Azure Account (free tier)
 - 8GB RAM, 20GB disk space
 
@@ -21,18 +20,13 @@ docker-compose up -d
 ```
 ⏱️ Wait 2-3 minutes for services to initialize.
 
-### 2. Install Python Dependencies
+### 2. Start Producer
 ```bash
-pip install -r requirements.txt
+docker-compose up producer
 ```
+Keep running in separate terminal. Or run in background with `docker-compose up -d producer`
 
-### 3. Start Producer
-```bash
-python producer.py
-```
-Keep running in separate terminal.
-
-### 4. Setup ksqlDB Streams
+### 3. Setup ksqlDB Streams
 ```bash
 docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
 ```
@@ -41,7 +35,7 @@ Copy-paste contents from `scripts/ksqldb_setup.sql` and run each statement.
 
 Exit with `exit;`
 
-### 5. Setup Azure Blob Storage
+### 4. Setup Azure Blob Storage
 
 1. **Azure Portal** (portal.azure.com):
    - Create Storage Account: `vehicleiotdata<yourname>`
@@ -62,14 +56,14 @@ AZURE_STORAGE_ACCOUNT_KEY=your_access_key
 AZURE_CONTAINER_NAME=vehicle-telemetry-data
 ```
 
-### 6. Deploy Connector
+### 5. Deploy Connector
 ```bash
 bash scripts/deploy_azure_connector.sh
 ```
 
 Verify status: `RUNNING`
 
-### 7. Verify Data in Azure
+### 6. Verify Data in Azure
 Wait 1-2 minutes, then check:
 - **Azure Portal** → Storage Account → Containers → `vehicle-telemetry-data`
 - Look for folders: `year=2024/month=XX/day=XX/hour=XX/`
@@ -111,9 +105,10 @@ bash scripts/verify_setup.sh
 ## Cleanup
 
 ```bash
-# Stop producer (Ctrl+C in producer terminal)
+# Stop producer
+docker-compose stop producer
 
-# Stop containers
+# Stop all containers
 docker-compose down
 
 # Remove all data (full reset)
@@ -148,11 +143,14 @@ docker logs kafka-connect | grep -i error
 
 ### Producer can't connect?
 ```bash
+# Check producer logs
+docker logs producer
+
 # Verify Kafka is running
 docker exec kafka kafka-broker-api-versions --bootstrap-server localhost:29092
 
-# Use alternate port
-python producer.py --broker localhost:9092
+# Restart producer
+docker-compose restart producer
 ```
 
 ---

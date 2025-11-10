@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class VehicleIoTSimulator:
     """Simulates IoT telemetry data from multiple vehicles"""
 
-    def __init__(self, bootstrap_servers='localhost:9092', topic='vehicle.telemetry'):
+    def __init__(self, bootstrap_servers='kafka:29092', topic='vehicle.telemetry'):
         """
         Initialize the Kafka producer
 
@@ -237,8 +237,8 @@ def main():
     parser = argparse.ArgumentParser(description='Vehicle IoT Telemetry Simulator')
     parser.add_argument(
         '--broker',
-        default='localhost:9092',
-        help='Kafka broker address (default: localhost:9092)'
+        default='kafka:29092',
+        help='Kafka broker address (default: kafka:29092)'
     )
     parser.add_argument(
         '--topic',

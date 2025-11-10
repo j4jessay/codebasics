@@ -32,6 +32,23 @@ check_service() {
     fi
 }
 
+check_kafka() {
+    local service_name=$1
+    local port=$2
+    local host=$3
+
+    echo -n "🔍 Checking $service_name (port $port)... "
+
+    # Use nc (netcat) to check TCP connectivity since Kafka uses binary protocol, not HTTP
+    if nc -zv "$host" "$port" > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ Running${NC}"
+        return 0
+    else
+        echo -e "${RED}✗ Not available${NC}"
+        return 1
+    fi
+}
+
 check_container() {
     local container_name=$1
 
@@ -60,9 +77,9 @@ echo ""
 # Step 2: Check service endpoints
 echo "🌐 Step 2: Checking Service Endpoints"
 echo "----------------------------------------"
-check_service "Kafka" "9092" "localhost:9092"
+check_kafka "Kafka" "9092" "localhost"
 check_service "ksqlDB Server" "8088" "http://localhost:8088/info"
-check_service "Kafka Connect" "8083" "http://localhost:8083/"
+check_service "Kafka Connect" "8083" "http://localhost:8083/connectors"
 check_service "Schema Registry" "8081" "http://localhost:8081/"
 check_service "Control Center" "9021" "http://localhost:9021/"
 echo ""

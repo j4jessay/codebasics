@@ -114,7 +114,6 @@ services:
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
       CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
-      KAFKA_OPTS: "-Dio.netty.transport.noNative=true -Dcom.microsoft.azure.storage.httpclient=netty -Dazure.sdk.http.client=netty -Dio.netty.channel.epoll.available=false"
     command:
       - bash
       - -c
