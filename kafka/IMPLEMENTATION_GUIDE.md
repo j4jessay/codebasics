@@ -8,12 +8,15 @@ This guide provides **step-by-step instructions** to implement a real-time vehic
 ## 📋 Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Project Overview](#project-overview)
-3. [Implementation Steps](#implementation-steps)
-4. [Verification & Troubleshooting](#verification--troubleshooting)
-5. [Azure Blob Storage Setup](#azure-blob-storage-setup)
-6. [Power BI Dashboard](#power-bi-dashboard)
-7. [Cleanup](#cleanup)
+2. [Architecture Compatibility](#architecture-compatibility)
+3. [Project Overview](#project-overview)
+4. [Understanding the Data Pipeline](#understanding-the-data-pipeline)
+5. [Environment Options](#environment-options)
+6. [Implementation Steps](#implementation-steps)
+7. [Verification & Troubleshooting](#verification--troubleshooting)
+8. [Azure Blob Storage Setup](#azure-blob-storage-setup)
+9. [Power BI Dashboard](#power-bi-dashboard)
+10. [Cleanup](#cleanup)
 
 ---
 
@@ -21,7 +24,6 @@ This guide provides **step-by-step instructions** to implement a real-time vehic
 
 ### Required Software
 - ✅ **Docker Desktop** (installed and running)
-- ✅ **Python 3.8+** (with pip)
 - ✅ **Git** (for cloning repository)
 - ✅ **Azure Account** (free tier is sufficient)
 - ⚠️ **8GB RAM minimum** (Docker containers are resource-intensive)
@@ -30,14 +32,91 @@ This guide provides **step-by-step instructions** to implement a real-time vehic
 ### Verify Docker Installation
 ```bash
 docker --version
-docker-compose --version
+docker compose version
 ```
 
-### Verify Python Installation
+### Check Your System Architecture
 ```bash
-python --version
-python3 --version
-pip --version
+uname -m
+```
+
+**Expected output:**
+- `x86_64` or `amd64` - ✅ Full compatibility
+- `arm64` or `aarch64` - ⚠️ Partial compatibility (see Architecture Compatibility section below)
+
+---
+
+## Architecture Compatibility
+
+### ⚠️ Important: Azure Blob Storage Connector Requirements
+
+The **Azure Blob Storage Sink Connector** requires **Linux x86_64** architecture. If you're running on:
+
+| Your System | Architecture | Status | Recommended Solution |
+|-------------|-------------|--------|----------------------|
+| **Mac Intel** | x86_64 | ✅ Full support | Run locally |
+| **Mac M1/M2/M3** | ARM64 | ⚠️ Partial support | Use GitHub Codespaces |
+| **Windows Intel/AMD** | x86_64 | ✅ Full support | Run locally |
+| **Windows ARM** | ARM64 | ⚠️ Partial support | Use GitHub Codespaces |
+| **Linux x86_64** | x86_64 | ✅ Full support | Run locally |
+| **Linux ARM64** | ARM64 | ⚠️ Partial support | Use cloud VM |
+
+### What Works on ARM64 (Mac M1/M2/M3)?
+
+✅ **Fully Functional:**
+- Kafka broker and message streaming
+- ksqlDB Server and stream processing
+- Producer and data generation
+- Schema Registry
+- Control Center UI
+
+❌ **Does NOT Work:**
+- Azure Blob Storage Connector (native library incompatibility)
+- Data export to Azure Blob Storage
+
+### Why This Happens
+
+The Azure connector uses an older networking library (Netty) that is hardcoded for x86_64 Linux. When it tries to run on ARM64:
+
+```
+Connector attempts to load: libnetty_transport_native_epoll_x86_64.so
+Your Mac has: ARM64 architecture (no x86_64 libraries)
+Result: UnsatisfiedLinkError → Connector FAILED
+```
+
+### Your Options
+
+**Option 1: GitHub Codespaces (Recommended - FREE)**
+- ✅ Free 60 hours/month
+- ✅ Linux x86_64 in the cloud
+- ✅ Everything works perfectly
+- ✅ [See CODESPACES.md](./CODESPACES.md) for setup
+
+**Option 2: Azure Virtual Machine**
+- ✅ Production-like environment
+- ✅ Same Azure region as Blob Storage (faster)
+- 💰 ~$15-30/month (can stop when not using)
+
+**Option 3: Local Testing (ARM64)**
+- ✅ Test Kafka, ksqlDB, Producer locally
+- ❌ Skip Azure Blob Storage connector
+- ✅ Learn core concepts without Azure integration
+
+### Decision Matrix
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Goal: Learn Kafka/ksqlDB Only                              │
+│ ├─► Run locally on Mac (ARM64)                             │
+│ └─► Skip Step 8 (Azure connector deployment)               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ Goal: Complete End-to-End Pipeline with Azure              │
+│ ├─► Mac M1/M2/M3: Use GitHub Codespaces (FREE)            │
+│ ├─► Mac Intel: Run locally                                 │
+│ └─► Production: Azure VM (Linux x86_64)                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -69,6 +148,162 @@ Python Simulator → Kafka → ksqlDB → Kafka Connect → Azure Blob Storage �
 
 ---
 
+## Understanding the Data Pipeline
+
+### Three-Component Architecture
+
+The pipeline consists of **THREE separate but connected components** that must ALL be running:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Component 1: INFRASTRUCTURE                                      │
+│ Command: docker compose up -d                                    │
+│                                                                   │
+│ ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │
+│ │  Zookeeper  │  │    Kafka    │  │   ksqlDB    │               │
+│ └─────────────┘  └─────────────┘  └─────────────┘               │
+│ ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │
+│ │ Kafka       │  │   Schema    │  │   Control   │               │
+│ │ Connect     │  │  Registry   │  │   Center    │               │
+│ └─────────────┘  └─────────────┘  └─────────────┘               │
+│                                                                   │
+│ Status: Creates the "highway system" for data to flow            │
+│ At this point: NO DATA is flowing yet!                           │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ Component 2: CONNECTOR CONFIGURATION                             │
+│ Command: scripts/deploy_azure_connector.sh                       │
+│                                                                   │
+│ ┌─────────────────────────────────────────────────────────────┐  │
+│ │  Kafka Connect Connector                                    │  │
+│ │  - Which topics to read from                                │  │
+│ │  - Where to write (Azure Blob Storage)                      │  │
+│ │  - Azure credentials                                        │  │
+│ │  - Data format and partitioning rules                       │  │
+│ └─────────────────────────────────────────────────────────────┘  │
+│                                                                   │
+│ Status: Connector is WAITING for data                            │
+│ At this point: Still NO DATA flowing!                            │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ Component 3: DATA PRODUCER                                       │
+│ Command: docker compose --profile producer up producer           │
+│                                                                   │
+│ ┌─────────────────────────────────────────────────────────────┐  │
+│ │  Vehicle IoT Simulator (producer.py)                        │  │
+│ │  - Generates vehicle telemetry data                         │  │
+│ │  - Sends to Kafka every 2 seconds                           │  │
+│ │  - Simulates 10 vehicles                                    │  │
+│ └─────────────────────────────────────────────────────────────┘  │
+│                                                                   │
+│ Status: NOW data flows through the entire pipeline!              │
+│ At this point: Data → Kafka → ksqlDB → Connect → Azure ✅        │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Why Is the Producer Separate?
+
+You might notice the producer uses a special command: `docker compose --profile producer up`
+
+This is intentional because:
+
+1. **Infrastructure First**: Kafka and ksqlDB need time to start up completely (~60 seconds)
+2. **Testing Flexibility**: You can test ksqlDB queries without generating new data
+3. **Resource Control**: The producer runs continuously and can consume resources
+4. **Manual Control**: You decide WHEN to start generating data
+
+### Complete Data Flow
+
+```
+1. Producer generates telemetry
+   └─► {"vehicle_id": "VEH-001", "speed_kmph": 95.5, ...}
+        │
+        ▼
+2. Kafka stores in topic
+   └─► Topic: vehicle.telemetry
+        │
+        ▼
+3. ksqlDB processes streams
+   ├─► Filter: speed > 80 → vehicle.speeding topic
+   ├─► Filter: fuel < 15 → vehicle.lowfuel topic
+   └─► Filter: temp > 100 → vehicle.overheating topic
+        │
+        ▼
+4. Kafka Connect reads topics
+   └─► Reads: vehicle.speeding, vehicle.lowfuel, vehicle.overheating
+        │
+        ▼
+5. Azure Blob Storage
+   └─► Files: year=2025/month=11/day=09/hour=15/vehicle_data.json
+```
+
+### What Happens If You Skip a Component?
+
+| Missing Component | Result |
+|-------------------|--------|
+| **Infrastructure** | Nothing runs - no Kafka, no topics |
+| **Connector** | Data stays in Kafka, never reaches Azure |
+| **Producer** | Empty topics, connector has nothing to send |
+
+**All three must run for end-to-end data flow!**
+
+---
+
+## Environment Options
+
+### Option A: Local Development (Mac ARM64 - Partial)
+
+**What to use this for:**
+- Learning Kafka concepts
+- Testing ksqlDB queries
+- Developing producer logic
+- Understanding stream processing
+
+**Steps:**
+1. Run infrastructure: `docker compose up -d` ✅
+2. Start producer: `docker compose --profile producer up` ✅
+3. Test ksqlDB queries ✅
+4. **SKIP** Azure connector deployment (won't work on ARM64) ❌
+
+**Limitations:**
+- No Azure Blob Storage integration
+- Connector will FAIL if attempted
+
+---
+
+### Option B: GitHub Codespaces (Full Pipeline - FREE)
+
+**What to use this for:**
+- Complete end-to-end pipeline
+- Azure Blob Storage integration
+- Production-like environment
+- Learning full data flow
+
+**Setup (5 minutes):**
+1. Go to: https://github.com/j4jessay/codebasics
+2. Click: Code → Codespaces → Create codespace
+3. Wait 2-3 minutes for setup
+4. See [CODESPACES.md](./CODESPACES.md) for detailed instructions
+
+**Benefits:**
+- ✅ Everything works (x86_64 architecture)
+- ✅ Free 60 hours/month
+- ✅ No local resource usage
+- ✅ Browser-based or VS Code
+- ✅ Production-like environment
+
+**Quickstart in Codespaces:**
+```bash
+cd kafka
+docker compose up -d                           # Start infrastructure
+scripts/deploy_azure_connector.sh              # Deploy connector ✅ WORKS!
+docker compose --profile producer up producer  # Start producer
+```
+
+---
+
 ## Implementation Steps
 
 ### STEP 1: Start Kafka Infrastructure
@@ -80,7 +315,7 @@ cd kafka
 
 Start all Docker containers:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 **Expected output:**
@@ -126,73 +361,60 @@ Open browser: http://localhost:9021
 
 ---
 
-### STEP 3: Install Python Dependencies
+### STEP 3: Start Vehicle IoT Simulator
 
-Install the Kafka Python client:
+**Note:** The producer uses a Docker Compose profile, so it requires a special command.
+
+Build and start the producer container:
 ```bash
-pip install -r requirements.txt
+docker compose --profile producer up producer
 ```
 
-Or manually:
-```bash
-pip install kafka-python==2.0.2
-```
-
-**Verify installation:**
-```bash
-python -c "import kafka; print(kafka.__version__)"
-```
-
-Expected output: `2.0.2`
-
----
-
-### STEP 4: Start Vehicle IoT Simulator
-
-Open a **new terminal window** and navigate to the kafka directory:
-```bash
-cd kafka
-```
-
-Start the producer:
-```bash
-python producer.py
-```
+**Why `--profile producer`?**
+The producer is intentionally separated so you can:
+- Start infrastructure first (Kafka needs ~60 seconds to be ready)
+- Test ksqlDB queries without generating new data
+- Control when data generation begins
 
 **Expected output:**
 ```
-🚀 Starting vehicle IoT simulator...
-   Topic: vehicle.telemetry
-   Vehicles: 10
-   Rate: 2.0 msg/sec per vehicle
-   Duration: Indefinite
-======================================================================
-✓ Connected to Kafka broker at localhost:9092
-📡 VEH-0001: active | Speed: 45.23 km/h | Fuel: 78.5%
-⚠️  VEH-0003: SPEEDING | Speed: 95.67 km/h | Fuel: 65.2% | Temp: 92.3°C
-📡 VEH-0002: active | Speed: 52.10 km/h | Fuel: 82.1%
+[+] Running 1/1
+ ✔ Container producer  Started
+Attaching to producer
+producer  | 🚀 Starting vehicle IoT simulator...
+producer  |    Topic: vehicle.telemetry
+producer  |    Vehicles: 10
+producer  |    Rate: 2.0 msg/sec per vehicle
+producer  |    Duration: Indefinite
+producer  | ======================================================================
+producer  | ✓ Connected to Kafka broker at kafka:29092
+producer  | 📡 VEH-0001: active | Speed: 45.23 km/h | Fuel: 78.5%
+producer  | ⚠️  VEH-0003: SPEEDING | Speed: 95.67 km/h | Fuel: 65.2% | Temp: 92.3°C
+producer  | 📡 VEH-0002: active | Speed: 52.10 km/h | Fuel: 82.1%
 ```
 
 **⚠️ Keep this terminal running!** The producer continuously sends data to Kafka.
 
-**Optional producer arguments:**
+**To run producer in detached mode (background):**
 ```bash
-# Run for 5 minutes only
-python producer.py --duration 300
-
-# Increase message rate to 5 per second
-python producer.py --rate 5.0
-
-# Custom Kafka broker
-python producer.py --broker localhost:9092
-
-# Custom topic name
-python producer.py --topic my.custom.topic
+docker compose --profile producer up -d producer
 ```
+
+**To view producer logs:**
+```bash
+docker logs producer -f
+```
+
+**To stop the producer:**
+```bash
+docker compose stop producer
+```
+
+**⚠️ Note:** If you see "no configuration file provided", make sure you're in the `kafka/` directory.
 
 ---
 
-### STEP 5: Verify Data is Flowing to Kafka
+### STEP 4: Verify Data is Flowing to Kafka
 
 Open a **new terminal window**.
 
@@ -219,7 +441,7 @@ docker exec kafka kafka-console-consumer \
 
 ---
 
-### STEP 6: Setup ksqlDB Streams
+### STEP 5: Setup ksqlDB Streams
 
 Access the ksqlDB CLI:
 ```bash
@@ -385,7 +607,7 @@ exit;
 
 ---
 
-### STEP 7: Verify ksqlDB Created Topics
+### STEP 6: Verify ksqlDB Created Topics
 
 Check all topics created by ksqlDB:
 ```bash
@@ -412,9 +634,9 @@ docker exec kafka kafka-console-consumer \
 
 ---
 
-### STEP 8: Setup Azure Blob Storage
+### STEP 7: Setup Azure Blob Storage
 
-#### 8.1 Create Azure Storage Account
+#### 7.1 Create Azure Storage Account
 
 1. **Login to Azure Portal**: https://portal.azure.com
 
@@ -435,7 +657,7 @@ docker exec kafka kafka-console-consumer \
 
 5. **Wait for deployment** (1-2 minutes)
 
-#### 8.2 Get Access Keys
+#### 7.2 Get Access Keys
 
 1. **Navigate to your storage account**
 2. **Left menu** → Security + networking → **Access keys**
@@ -444,7 +666,7 @@ docker exec kafka kafka-console-consumer \
    - Storage account name: `vehicleiotdata<yourname>`
    - key1: `<long-string-of-characters>`
 
-#### 8.3 Create Blob Container
+#### 7.3 Create Blob Container
 
 1. **Left menu** → Data storage → **Containers**
 2. **Click "+ Container"**
@@ -452,7 +674,7 @@ docker exec kafka kafka-console-consumer \
 4. **Public access level**: Private
 5. **Click "Create"**
 
-#### 8.4 Configure Connector Credentials
+#### 7.4 Configure Connector Credentials
 
 Create a credentials file:
 ```bash
@@ -479,7 +701,7 @@ AZURE_CONTAINER_NAME=vehicle-telemetry-data
 
 ---
 
-### STEP 9: Deploy Azure Blob Storage Connector
+### STEP 8: Deploy Azure Blob Storage Connector
 
 Deploy the connector using the deployment script:
 ```bash
@@ -533,7 +755,7 @@ Connector Details:
 
 ---
 
-### STEP 10: Verify Data in Azure Blob Storage
+### STEP 9: Verify Data in Azure Blob Storage
 
 #### Method 1: Azure Portal
 
@@ -580,7 +802,7 @@ az storage blob list \
 
 ---
 
-### STEP 11: Monitor the Pipeline
+### STEP 10: Monitor the Pipeline
 
 #### Check Kafka Connect Logs
 ```bash
@@ -618,10 +840,57 @@ Navigate to:
 
 ### Common Issues
 
-#### Issue 1: Containers won't start
+#### Issue 1: Azure Blob Storage Connector FAILS on Mac M1/M2/M3 (ARM64)
+
+**Symptoms:**
+```bash
+curl http://localhost:8083/connectors/azure-blob-sink-connector/status
+
+{
+  "connector": {"state": "RUNNING"},
+  "tasks": [{
+    "state": "FAILED",
+    "trace": "java.lang.UnsatisfiedLinkError: failed to load the required native library..."
+  }]
+}
+```
+
+**Root Cause:**
+The Azure connector requires x86_64 Linux architecture. Mac M1/M2/M3 use ARM64, which is incompatible.
+
+**Solutions:**
+
+**Option A: Use GitHub Codespaces (Recommended - FREE)**
+1. Go to https://github.com/j4jessay/codebasics
+2. Click Code → Codespaces → Create codespace
+3. Run all steps in Codespaces (x86_64 environment)
+4. See [CODESPACES.md](./CODESPACES.md) for details
+
+**Option B: Skip Azure Integration (Learn Kafka/ksqlDB Only)**
+1. Complete Steps 1-7 (everything except Azure connector)
+2. Learn Kafka topics, ksqlDB queries, stream processing
+3. Deploy connector later when you have x86_64 access
+
+**Option C: Use Azure VM or EC2**
+1. Create Linux x86_64 virtual machine
+2. Install Docker
+3. Clone repository and run there
+
+**Verification:**
+```bash
+# Check your architecture
+uname -m
+
+# arm64 or aarch64 → Use Codespaces
+# x86_64 or amd64 → Can run locally
+```
+
+---
+
+#### Issue 2: Containers won't start
 ```bash
 # Check Docker logs
-docker-compose logs
+docker compose logs
 
 # Check port conflicts
 netstat -tulpn | grep -E '(9092|8088|8083|9021)'
@@ -631,14 +900,17 @@ netstat -tulpn | grep -E '(9092|8088|8083|9021)'
 
 #### Issue 2: Producer can't connect to Kafka
 ```bash
+# Check producer logs
+docker logs producer
+
 # Verify Kafka is accessible
 docker exec kafka kafka-broker-api-versions --bootstrap-server localhost:29092
 
 # Check if topic exists
 docker exec kafka kafka-topics --bootstrap-server localhost:29092 --list
 
-# Try alternative port
-python producer.py --broker localhost:9092
+# Restart producer
+docker compose restart producer
 ```
 
 #### Issue 3: ksqlDB queries fail
@@ -692,10 +964,13 @@ curl http://localhost:8083/connectors/azure-blob-sink-connector | jq '.config'
 # Check resource usage
 docker stats
 
-# Reduce producer rate
-python producer.py --rate 0.5
+# Stop producer temporarily
+docker compose stop producer
 
-# Reduce number of vehicles in producer.py (edit file)
+# Modify producer configuration (reduce vehicles or rate)
+# Edit producer.py, then rebuild:
+docker compose build producer
+docker compose up producer
 
 # Increase Docker memory allocation (Docker Desktop → Settings → Resources)
 ```
@@ -756,20 +1031,20 @@ python producer.py --rate 0.5
 
 ## Cleanup
 
-### Stop Producers
+### Stop Producer
 ```bash
-# In producer terminal, press Ctrl+C
+docker compose stop producer
 ```
 
-### Stop Docker Containers
+### Stop All Docker Containers
 ```bash
 cd kafka
-docker-compose down
+docker compose down
 ```
 
 ### Remove Docker Volumes (complete reset)
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Delete Azure Resources
@@ -823,9 +1098,9 @@ docker-compose down -v
 
 ## Summary Checklist
 
-- [ ] Docker containers running (7 containers)
+- [ ] Docker containers running (7 infrastructure containers)
 - [ ] Kafka accessible on port 9092
-- [ ] Python producer sending data
+- [ ] Producer container running and sending data
 - [ ] Topics created: `vehicle.telemetry`, `vehicle.speeding`, `vehicle.lowfuel`, `vehicle.overheating`
 - [ ] ksqlDB streams and tables created
 - [ ] Azure Storage Account created
@@ -840,7 +1115,7 @@ docker-compose down -v
 
 For issues or questions:
 1. Check the **Troubleshooting** section above
-2. Review Docker logs: `docker-compose logs`
+2. Review Docker logs: `docker compose logs`
 3. Check Kafka Connect logs: `docker logs kafka-connect`
 4. Review ksqlDB logs: `docker logs ksqldb-server`
 5. Open an issue in this repository
