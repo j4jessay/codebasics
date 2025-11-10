@@ -4,6 +4,7 @@
     "connector.class": "io.confluent.connect.azure.blob.AzureBlobStorageSinkConnector",
     "tasks.max": "1",
     "topics": "vehicle.speeding,vehicle.lowfuel,vehicle.overheating,vehicle.alerts.all",
+    "confluent.topic.bootstrap.servers": "kafka:29092",
     "flush.size": "10",
     "azblob.account.name": "YOUR_AZURE_STORAGE_ACCOUNT_NAME",
     "azblob.account.key": "YOUR_AZURE_STORAGE_ACCOUNT_KEY",

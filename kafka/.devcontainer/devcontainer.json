@@ -1,0 +1,62 @@
+{
+  "name": "Kafka IoT Streaming Pipeline",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+
+  "forwardPorts": [
+    9092,
+    8088,
+    8083,
+    9021,
+    2181
+  ],
+
+  "portsAttributes": {
+    "9092": {
+      "label": "Kafka Broker",
+      "onAutoForward": "notify"
+    },
+    "8088": {
+      "label": "ksqlDB Server",
+      "onAutoForward": "notify"
+    },
+    "8083": {
+      "label": "Kafka Connect",
+      "onAutoForward": "notify"
+    },
+    "9021": {
+      "label": "Control Center",
+      "onAutoForward": "openBrowser"
+    },
+    "2181": {
+      "label": "Zookeeper",
+      "onAutoForward": "silent"
+    }
+  },
+
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y docker-compose-plugin jq curl",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+
+  "waitFor": "postCreateCommand"
+}
