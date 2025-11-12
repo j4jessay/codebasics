@@ -1,0 +1,28 @@
+{
+  "name": "azure-blob-sink-connector",
+  "config": {
+    "connector.class": "io.confluent.connect.azure.blob.AzureBlobStorageSinkConnector",
+    "tasks.max": "1",
+    "topics": "vehicle.speeding,vehicle.lowfuel,vehicle.overheating,vehicle.alerts.all",
+    "confluent.topic.bootstrap.servers": "kafka:29092",
+    "flush.size": "10",
+    "azblob.account.name": "YOUR_AZURE_STORAGE_ACCOUNT_NAME",
+    "azblob.account.key": "YOUR_AZURE_STORAGE_ACCOUNT_KEY",
+    "azblob.container.name": "vehicle-telemetry-data",
+    "format.class": "io.confluent.connect.azure.blob.format.json.JsonFormat",
+    "partitioner.class": "io.confluent.connect.storage.partitioner.TimeBasedPartitioner",
+    "path.format": "'year'=YYYY/'month'=MM/'day'=dd/'hour'=HH",
+    "partition.duration.ms": "3600000",
+    "locale": "en-US",
+    "timezone": "UTC",
+    "timestamp.extractor": "Record",
+    "timestamp.field": "timestamp_utc",
+    "rotate.schedule.interval.ms": "60000",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "errors.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true"
+  }
+}
