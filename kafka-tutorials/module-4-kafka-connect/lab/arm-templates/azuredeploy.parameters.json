@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "projectName": {
+      "value": "kafka-etl"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "synapseSqlAdminUsername": {
+      "value": "sqladmin"
+    },
+    "synapseSqlAdminPassword": {
+      "value": "REPLACE_WITH_SECURE_PASSWORD"
+    },
+    "synapseSqlPoolSKU": {
+      "value": "DW100c"
+    },
+    "enablePublicNetworkAccess": {
+      "value": true
+    },
+    "tags": {
+      "value": {
+        "Project": "Kafka Tutorials",
+        "Module": "Module 4 - Azure Data Factory",
+        "Environment": "Development",
+        "CostCenter": "Training",
+        "Owner": "Your Name"
+      }
+    }
+  }
+}

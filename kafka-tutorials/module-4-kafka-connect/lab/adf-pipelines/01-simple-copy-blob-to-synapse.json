@@ -1,0 +1,173 @@
+{
+  "name": "SimpleC opyCopyBlobToSynapse",
+  "properties": {
+    "description": "Simple pipeline to copy Parquet files from Azure Blob Storage to Synapse Analytics",
+    "activities": [
+      {
+        "name": "CopyVehicleTelemetryData",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 3,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [
+          {
+            "name": "Source",
+            "value": "vehicle-telemetry/@{formatDateTime(utcnow(), 'yyyy/MM/dd')}"
+          },
+          {
+            "name": "Destination",
+            "value": "dbo.VehicleTelemetry"
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobFSReadSettings",
+              "recursive": true,
+              "wildcardFolderPath": {
+                "value": "@concat('vehicle-telemetry/', formatDateTime(utcnow(), 'yyyy/MM/dd'))",
+                "type": "Expression"
+              },
+              "wildcardFileName": "*.parquet",
+              "enablePartitionDiscovery": false
+            }
+          },
+          "sink": {
+            "type": "SqlDWSink",
+            "preCopyScript": "",
+            "allowPolyBase": true,
+            "polyBaseSettings": {
+              "rejectValue": 0,
+              "rejectType": "value",
+              "useTypeDefault": true
+            },
+            "tableOption": "autoCreate",
+            "disableMetricsCollection": false
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "mappings": [
+              {
+                "source": {
+                  "name": "vehicle_id",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "VehicleID",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "timestamp",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "RecordedTimestamp",
+                  "type": "DateTime"
+                }
+              },
+              {
+                "source": {
+                  "name": "latitude",
+                  "type": "Double"
+                },
+                "sink": {
+                  "name": "Latitude",
+                  "type": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "name": "longitude",
+                  "type": "Double"
+                },
+                "sink": {
+                  "name": "Longitude",
+                  "type": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "name": "speed",
+                  "type": "Double"
+                },
+                "sink": {
+                  "name": "Speed",
+                  "type": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "name": "fuel_level",
+                  "type": "Double"
+                },
+                "sink": {
+                  "name": "FuelLevel",
+                  "type": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "name": "engine_temp",
+                  "type": "Double"
+                },
+                "sink": {
+                  "name": "EngineTemp",
+                  "type": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "name": "status",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "Status",
+                  "type": "String"
+                }
+              }
+            ],
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "DS_BlobStorage_VehicleTelemetry_Parquet",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "DS_Synapse_VehicleTelemetry_Table",
+            "type": "DatasetReference"
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "loadDate": {
+        "type": "string",
+        "defaultValue": "@formatDateTime(utcnow(), 'yyyy-MM-dd')"
+      }
+    },
+    "annotations": [
+      "Vehicle Telemetry",
+      "Kafka to Synapse",
+      "Simple Copy"
+    ],
+    "lastPublishTime": "2025-11-17T00:00:00Z"
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}

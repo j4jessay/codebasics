@@ -1,0 +1,364 @@
+{
+  "name": "StagedLoadWithValidation",
+  "properties": {
+    "description": "Production-grade pipeline with staging, validation, and error handling",
+    "activities": [
+      {
+        "name": "GetWatermark",
+        "description": "Retrieve the last successful load timestamp",
+        "type": "Lookup",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlDWSource",
+            "sqlReaderQuery": "SELECT ISNULL(MAX(RecordedTimestamp), '1900-01-01') AS LastLoadTime FROM dbo.VehicleTelemetry",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "dataset": {
+            "referenceName": "DS_Synapse_VehicleTelemetry_Table",
+            "type": "DatasetReference"
+          }
+        }
+      },
+      {
+        "name": "CopyToStagingTable",
+        "description": "Copy new data from Blob to Synapse staging table",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "GetWatermark",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 3,
+          "retryIntervalInSeconds": 60,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobFSReadSettings",
+              "recursive": true,
+              "wildcardFolderPath": {
+                "value": "@concat('vehicle-telemetry/', formatDateTime(pipeline().parameters.windowStart, 'yyyy/MM/dd/HH'))",
+                "type": "Expression"
+              },
+              "wildcardFileName": "*.parquet",
+              "modifiedDatetimeStart": {
+                "value": "@activity('GetWatermark').output.firstRow.LastLoadTime",
+                "type": "Expression"
+              },
+              "modifiedDatetimeEnd": {
+                "value": "@pipeline().parameters.windowEnd",
+                "type": "Expression"
+              },
+              "enablePartitionDiscovery": false
+            }
+          },
+          "sink": {
+            "type": "SqlDWSink",
+            "preCopyScript": "TRUNCATE TABLE dbo.VehicleTelemetry_Staging",
+            "allowPolyBase": true,
+            "polyBaseSettings": {
+              "rejectValue": 100,
+              "rejectType": "value",
+              "useTypeDefault": true
+            },
+            "disableMetricsCollection": false
+          },
+          "enableStaging": false,
+          "dataIntegrationUnits": 4,
+          "translator": {
+            "type": "TabularTranslator",
+            "mappings": [
+              {
+                "source": {"name": "vehicle_id"},
+                "sink": {"name": "VehicleID"}
+              },
+              {
+                "source": {"name": "timestamp"},
+                "sink": {"name": "RecordedTimestamp"}
+              },
+              {
+                "source": {"name": "latitude"},
+                "sink": {"name": "Latitude"}
+              },
+              {
+                "source": {"name": "longitude"},
+                "sink": {"name": "Longitude"}
+              },
+              {
+                "source": {"name": "speed"},
+                "sink": {"name": "Speed"}
+              },
+              {
+                "source": {"name": "fuel_level"},
+                "sink": {"name": "FuelLevel"}
+              },
+              {
+                "source": {"name": "engine_temp"},
+                "sink": {"name": "EngineTemp"}
+              },
+              {
+                "source": {"name": "status"},
+                "sink": {"name": "Status"}
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "DS_BlobStorage_VehicleTelemetry_Parquet",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "DS_Synapse_VehicleTelemetry_Staging",
+            "type": "DatasetReference"
+          }
+        ]
+      },
+      {
+        "name": "ValidateDataQuality",
+        "description": "Check data quality rules on staging table",
+        "type": "Lookup",
+        "dependsOn": [
+          {
+            "activity": "CopyToStagingTable",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:10:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlDWSource",
+            "sqlReaderQuery": {
+              "value": "@concat('\n  SELECT \n    COUNT(*) AS TotalRows,\n    SUM(CASE WHEN Speed < 0 OR Speed > 200 THEN 1 ELSE 0 END) AS InvalidSpeed,\n    SUM(CASE WHEN FuelLevel < 0 OR FuelLevel > 100 THEN 1 ELSE 0 END) AS InvalidFuel,\n    SUM(CASE WHEN EngineTemp < -50 OR EngineTemp > 200 THEN 1 ELSE 0 END) AS InvalidTemp,\n    SUM(CASE WHEN VehicleID IS NULL OR RecordedTimestamp IS NULL THEN 1 ELSE 0 END) AS MissingRequired\n  FROM dbo.VehicleTelemetry_Staging\n')",
+              "type": "Expression"
+            },
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "dataset": {
+            "referenceName": "DS_Synapse_VehicleTelemetry_Staging",
+            "type": "DatasetReference"
+          }
+        }
+      },
+      {
+        "name": "CheckValidationResults",
+        "description": "Determine if data quality meets threshold",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "ValidateDataQuality",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(\n  greater(activity('ValidateDataQuality').output.firstRow.TotalRows, 0),\n  less(\n    div(\n      add(\n        activity('ValidateDataQuality').output.firstRow.InvalidSpeed,\n        add(\n          activity('ValidateDataQuality').output.firstRow.InvalidFuel,\n          add(\n            activity('ValidateDataQuality').output.firstRow.InvalidTemp,\n            activity('ValidateDataQuality').output.firstRow.MissingRequired\n          )\n        )\n      ),\n      activity('ValidateDataQuality').output.firstRow.TotalRows\n    ),\n    0.05\n  )\n)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "MergeStagingToMain",
+              "description": "Merge validated data from staging to main table",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.12:00:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 60
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "storedProcedureName": "dbo.sp_MergeVehicleTelemetry",
+                "storedProcedureParameters": {
+                  "WindowStart": {
+                    "value": {
+                      "value": "@pipeline().parameters.windowStart",
+                      "type": "Expression"
+                    },
+                    "type": "DateTime"
+                  },
+                  "WindowEnd": {
+                    "value": {
+                      "value": "@pipeline().parameters.windowEnd",
+                      "type": "Expression"
+                    },
+                    "type": "DateTime"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "LS_AzureSynapse",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "LogSuccessfulLoad",
+              "description": "Log pipeline execution to audit table",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [
+                {
+                  "activity": "MergeStagingToMain",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "0.00:05:00",
+                "retry": 1
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "storedProcedureName": "dbo.sp_LogPipelineRun",
+                "storedProcedureParameters": {
+                  "PipelineName": {
+                    "value": {
+                      "value": "@pipeline().Pipeline",
+                      "type": "Expression"
+                    },
+                    "type": "String"
+                  },
+                  "RunID": {
+                    "value": {
+                      "value": "@pipeline().RunId",
+                      "type": "Expression"
+                    },
+                    "type": "String"
+                  },
+                  "Status": {
+                    "value": "Success",
+                    "type": "String"
+                  },
+                  "RecordsLoaded": {
+                    "value": {
+                      "value": "@activity('CopyToStagingTable').output.rowsCopied",
+                      "type": "Expression"
+                    },
+                    "type": "Int32"
+                  },
+                  "WindowStart": {
+                    "value": {
+                      "value": "@pipeline().parameters.windowStart",
+                      "type": "Expression"
+                    },
+                    "type": "DateTime"
+                  },
+                  "WindowEnd": {
+                    "value": {
+                      "value": "@pipeline().parameters.windowEnd",
+                      "type": "Expression"
+                    },
+                    "type": "DateTime"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "LS_AzureSynapse",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "LogValidationFailure",
+              "description": "Log failed validation to audit table",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.00:05:00",
+                "retry": 1
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "storedProcedureName": "dbo.sp_LogPipelineRun",
+                "storedProcedureParameters": {
+                  "PipelineName": {
+                    "value": {
+                      "value": "@pipeline().Pipeline",
+                      "type": "Expression"
+                    },
+                    "type": "String"
+                  },
+                  "RunID": {
+                    "value": {
+                      "value": "@pipeline().RunId",
+                      "type": "Expression"
+                    },
+                    "type": "String"
+                  },
+                  "Status": {
+                    "value": "Validation Failed",
+                    "type": "String"
+                  },
+                  "ErrorMessage": {
+                    "value": {
+                      "value": "@concat('Data quality check failed. Invalid records exceed 5% threshold. Details: Speed=', activity('ValidateDataQuality').output.firstRow.InvalidSpeed, ', Fuel=', activity('ValidateDataQuality').output.firstRow.InvalidFuel)",
+                      "type": "Expression"
+                    },
+                    "type": "String"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "LS_AzureSynapse",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": {
+      "windowStart": {
+        "type": "string",
+        "defaultValue": "@addHours(utcnow(), -1)"
+      },
+      "windowEnd": {
+        "type": "string",
+        "defaultValue": "@utcnow()"
+      }
+    },
+    "variables": {
+      "ErrorMessage": {
+        "type": "String"
+      }
+    },
+    "annotations": [
+      "Production Pipeline",
+      "Data Quality Validation",
+      "Staged Load"
+    ],
+    "lastPublishTime": "2025-11-17T00:00:00Z"
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}
