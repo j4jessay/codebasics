@@ -83,20 +83,21 @@ Process streaming data in real-time using SQL.
 
 ---
 
-### Module 4: Kafka Connect & Data Integration (60 minutes)
-**Theory: 20 min | Hands-On: 40 min**
+### Module 4: Kafka Connect & Azure Data Factory (90 minutes)
+**Theory: 40 min | Hands-On: 50 min**
 
-Export Kafka data to external systems without writing code.
+Export Kafka data to Azure cloud and build ETL pipelines to load data into a data warehouse.
 
 **What You'll Learn:**
-- Kafka Connect architecture
-- Source vs Sink connectors
-- Configuration and deployment
+- Kafka Connect architecture (source vs sink connectors)
+- Azure Data Factory for ETL orchestration
+- ARM templates for automated Azure resource deployment
+- Data warehouse loading patterns (staging, validation, merge)
 
 **What You'll Build:**
-- Azure Blob Storage sink connector
-- Time-based partitioning (hourly folders)
-- Automatic data export pipeline
+- Azure Blob Storage sink connector with Parquet export
+- Azure Data Factory pipelines for Synapse Analytics
+- Complete ETL workflow (Kafka → Blob → ADF → Synapse)
 
 **[→ Start Module 4](module-4-kafka-connect/)**
 
@@ -122,22 +123,26 @@ Monitor, troubleshoot, and operate Kafka in production.
 
 ---
 
-### Module 6: End-to-End Production Pipeline (60 minutes)
-**Theory: 15 min | Hands-On: 45 min**
+### Module 6: Complete Pipeline with Azure Synapse (85 minutes)
+**Theory: 40 min | Hands-On: 45 min**
 
-Deploy the complete pipeline and understand production considerations.
+Deploy the complete Kafka-to-Azure data warehouse pipeline and understand production considerations.
 
 **What You'll Learn:**
+- Azure Synapse Analytics and cloud data warehousing
+- MPP architecture and distribution strategies
 - Scaling Kafka (partitions, replication, brokers)
-- Production best practices
+- Production best practices and cost optimization
 - Real-world use cases and industry applications
 
 **What You'll Build:**
 - Full 7-service Kafka stack
-- Complete vehicle monitoring pipeline
-- Custom adaptation (change the use case)
+- Azure Synapse data warehouse with star schema
+- Complete end-to-end pipeline (Kafka → Blob → ADF → Synapse)
+- Analytical views for BI consumption
+- Custom capstone project
 
-**[→ Start Module 6](module-6-end-to-end-pipeline/)**
+**[→ Start Module 6](module-6-complete-pipeline/)**
 
 ---
 
@@ -495,9 +500,10 @@ kafka-tutorials/
 │   ├── theory/
 │   └── lab/
 │
-├── module-6-end-to-end-pipeline/
+├── module-6-complete-pipeline/
 │   ├── theory/
-│   └── lab/
+│   ├── lab/
+│   └── capstone/
 │
 └── reference/
     ├── quick-commands.md        # Cheat sheet

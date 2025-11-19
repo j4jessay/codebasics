@@ -1,7 +1,7 @@
-# Module 6: End-to-End Pipeline
+# Module 6: Complete Pipeline with Azure Synapse
 
-## ⏱️ Duration: 60 minutes
-**Theory: 15 min | Hands-On: 45 min**
+## ⏱️ Duration: 85 minutes
+**Theory: 40 min | Hands-On: 45 min**
 
 ---
 
@@ -11,6 +11,10 @@ By the end of this module, you will be able to:
 
 - ✅ Deploy the complete vehicle telemetry pipeline from scratch
 - ✅ Integrate all components (Kafka, producers, ksqlDB, Connect, monitoring)
+- ✅ Understand Azure Synapse Analytics and cloud data warehousing
+- ✅ Create star schema tables with appropriate distribution strategies
+- ✅ Load streaming data into Synapse using Azure Data Factory
+- ✅ Build analytical views for BI tool consumption
 - ✅ Understand production considerations for Kafka deployments
 - ✅ Scale the system for higher throughput
 - ✅ Apply best practices for real-world systems
@@ -20,7 +24,7 @@ By the end of this module, you will be able to:
 
 ## 📚 Module Structure
 
-### Part 1: Theory (15 minutes)
+### Part 1: Theory (40 minutes)
 
 Read the following theory files in order:
 
@@ -35,6 +39,16 @@ Read the following theory files in order:
    - Adding brokers and partitions
    - Consumer scaling strategies
    - Monitoring at scale
+
+3. **[Azure Synapse Analytics](theory/03-azure-synapse-analytics.md)** (25 min)
+   - What is Azure Synapse Analytics and cloud data warehousing
+   - MPP architecture and dedicated SQL pools
+   - Distribution strategies (HASH, ROUND_ROBIN, REPLICATED)
+   - Loading data with COPY statement and ADF integration
+   - Integration with Kafka pipeline (Bronze/Silver/Gold layers)
+   - Schema design best practices (star schema, indexes, statistics)
+   - Cost management (pause/resume, DWU sizing)
+   - When to use Synapse vs alternatives
 
 ### Part 2: Hands-On Lab (45 minutes)
 
